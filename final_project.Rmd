@@ -1,0 +1,30 @@
+---
+title: "Final Project"
+author: "Quang, Devanshu, Goeun"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r message=F}
+library(ggplot2)
+library(mosaic)
+```
+
+
+```{r}
+#loading the dataset
+bill<- read.csv("Billionaires Statistics Dataset.csv")
+```
+
+```{r}
+ggplot(bill, aes(x = reorder(industries, log(finalWorth), median), y = log(log(finalWorth)), col = industries)) + 
+  geom_boxplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab("Final Worth in Millions (log-log-trasnsformed)") + xlab("Industries") + labs(title = "Boxplot of Final Worth by Industries", subtitle = "Ordered by Median Final Worth") +  theme(legend.position="none")
+```
+
+
+
+
+
+
+
