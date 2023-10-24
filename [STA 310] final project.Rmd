@@ -9,18 +9,32 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-#loading the billionaire data
-bill<- read.csv("C:\Users\lequang\Desktop\final project\Bill.csv")
-#loading the world bank data
-wb<- read.csv("C:\Users\lequang\Desktop\final project\worldbank.csv")
-```
-
-```{r}
 library(tidyverse)
+library(caret)
 ```
 
 ```{r}
+#loading the billionaire data
+bill<- read.csv("Bill.csv")
 
+#loading the world bank data
+wb<- read.csv("worldbank.csv")
+
+# Loading
+country = read.csv("country.csv")
+```
+
+```{r}
+# Update entries in countries dataset to match with entries in billionaires dataset
+country = select(country, c("Country", "GDP", "CPI"))
+country$CPI = as.numeric(country$CPI)
+country$GDP = as.numeric(gsub('[$,]', '', country$GDP))
+country$GDP = country$GDP / 1000000000
+country = country %>% add_row(Country = "Taiwan", CPI = 106.52,GDP = 790.7) %>% add_row(Country = "Hong Kong", CPI = 105.60, GDP = 369.2) %>% add_row(Country = "Macau", CPI = 104.86, GDP = 30.12)
+country$Country <- country$Country %>%
+  str_replace_all("Republic of Ireland","Ireland") %>%
+  str_replace_all("Eswatini","Eswatini (Swaziland)") %>%
+  str_replace_all("Saint Kitts and Nevis","St. Kitts and Nevis")
 ```
 
 ```{r}
@@ -106,59 +120,99 @@ my_data<- merge_data%>%
 ```
 
 ```{r}
+
+
+list_country_gdp <- unique(country$Country)
+list_country_mydata <- unique(my_data$countryOfCitizenship)
+
+for(i in 1:length(list_country_mydata)){
+  if((list_country_mydata[i] %in% list_country_gdp)==FALSE)
+    print(list_country_mydata[i])
+}
+
+
+# Update missing values in billionaires dataset using countries datset
+for(i in 1:length(my_data$cpi_country)) {
+  if (is.na(my_data$cpi_country[i])) {
+    my_data$cpi_country[i] = country$CPI[country$Country == my_data$countryOfCitizenship[i]]
+  }
+  my_data$gdp_country[i] = country$GDP[country$Country == my_data$countryOfCitizenship[i]]
+}
+
+my_data$gdp_country = as.numeric(my_data$gdp_country)
+
+# Drop NA entries from countries that don't have CPI data
+my_data = my_data %>% drop_na(cpi_country)
+```
+
+
+```{r}
 #adding a age group variable
 
-age_group <- function(age) {
+check_over_50 <- function(age) {
   if (any(is.na(age))) {
-    return("unknown")
-  } else if(age < 21) {
-    return("1-20")
-  } else if (age <= 40) {
-    return("21-40")
-  } else if (age <= 60) {
-    return("41-60")
+    return("na")
+  } else if(age < 50) {
+    return(FALSE)
   } else {
-    return("over 60")
+    return(TRUE)
   }
 }
 
-my_data$ageGroup = sapply(my_data$age, age_group)
+my_data$isOver50 = sapply(my_data$age, check_over_50)
+my_data = filter(my_data, age != -1)
 ```
 
 ```{r}
-library(caret)
-```
-
-```{r}
-#creating a training and test set
+# Creating a training and test set
 set.seed(1025)
 sample <- sample.int(n = nrow(my_data), size = floor(.7*nrow(my_data)), replace = F)
 train <- my_data[sample, ]
 test  <- my_data[-sample, ]
-```
-
-```{r}
-train = select(train, c("finalWorth", "industries", "age", "selfMade", "gender", "countryOfCitizenship", "ageGroup", "Political Stability and Absence of Violence/Terrorism: Estimate", "Control of Corruption: Estimate", "Rule of Law: Estimate"))
-```
-
-```{r}
-install.packages(leap)
-require(leaps)
+train = train %>% mutate(TFinalWorth = log(log(train$finalWorth)))
 ```
 
 
 ```{r}
-full_train <-  train %>%
-  select(-c(finalWorth))
-best.lm <- leaps(full_train,train$finalWorth, method = "adjr2", nbest=2)
-data1 = cbind(best.lm$which,best.lm$adjr2) 
+# train1 = select(train, c("TFinalWorth", "gdp_country", "cpi_country", "Control of Corruption: Estimate", "Control of Corruption: Number of Sources", "Control of Corruption: Percentile Rank", "Government Effectiveness: Percentile Rank", "Political Stability and Absence of Violence/Terrorism: Estimate", "Regulatory Quality: Number of Sources", "Rule of Law: Estimate", "Rule of Law: Number of Sources", "Voice and Accountability: Estimate", "Voice and Accountability: Number of Sources"))
+
+# lm(formula = TFinalWorth ~ gdp_country, data = train1)
+# Multiple R-squared:  0.09036,	Adjusted R-squared:  0.05277
+# We can use any country-related variable and would still get the same R2 value. We decided to go with gdp_country for simpler analysis. 
+
+# GDP is added with the rest of the variables for a second step-wise test
+train2 = select(train, c("isOver50", "TFinalWorth", "industries", "selfMade", "gdp_country", "gender"))
+
+# lm(formula = TFinalWorth ~ isOver50 + selfMade + gdp_country, data = train2)
+
+# Residual standard error: 0.09598 on 1589 degrees of freedom
+# Multiple R-squared:  0.01245,	Adjusted R-squared:  0.01058 
+# F-statistic: 6.675 on 3 and 1589 DF,  p-value: 0.0001775
+
+full.model2= lm(TFinalWorth~., data = train2)
+step.model2 <- step(full.model2)
+summary(step.model2)
 ```
 
+```{r}
+### TODO: Run best subsets on main dataset, create mplots with top variables, create pairs plot to check for correlation, check residual plots 
+```
 
+```{r}
+ggplot(data = train, aes(x = age, y = TFinalWorth)) + geom_point()  + aes(colour = gender) + facet_wrap(~selfMade, ncol = 4)  + stat_smooth(method = lm) + theme(legend.position = "right") + labs(title = "Billionares' Net Worth vs. Age by Self-made Status and Gender", x = "Age", y = "Net Worth (in Millions double logged)")
+```
 
+```{r}
+best.model = lm(formula = TFinalWorth ~ isOver50 + selfMade + gdp_country, data = train2)
+best.model.res = best.model$res
+best.model.fit = best.model$fit
 
-
-
+par(mfrow=c(2,2))
+plot(train2$gdp_country, best.model.res, xlab = "GDP per country", ylab = "Residuals")
+plot(best.model.fit, best.model.res, xlab = "Fitted Values", ylab = "Residuals")
+plot(train2$selfMade, best.model.res, xlab = "Selfmade", ylab = "Residuals")
+plot(train2$isOver50, best.model.res, xlab = "Over 50 Years Old", ylab = "Residuals")
+```
 
 
 
