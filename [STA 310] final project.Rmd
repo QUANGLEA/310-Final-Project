@@ -1,0 +1,164 @@
+---
+title: '[STA 310] data checking'
+output: html_document
+date: "2023-10-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#loading the billionaire data
+bill<- read.csv("Bill.csv")
+#loading the world bank data
+wb<- read.csv("worldbank.csv")
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+
+```
+
+```{r}
+#checking if all the countries are included in the world bank dataset
+list_country_wb <- unique(wb$Country.Name)
+list_country_bill <- unique(bill$countryOfCitizenship)
+
+for(i in 1:77){
+  if((list_country_bill[i] %in% list_country_wb)==FALSE)
+    print(list_country_bill[i])
+}
+
+# Hongkong = Hong Kong SAR, China
+# Russia = Russian Federation
+# Czech Republic = Czechia
+# South Korea = Korea, Rep.
+# Taiwan = 	Taiwan, China
+# Egypt = Egypt, Arab Rep.
+# Eswatini (Swaziland) = 	Eswatini
+# Turkey = Turkiye
+# Venezuela = Venezuela, RB
+# Guernsey = 
+# slovakia = Slovak Republic
+# Macau = Macao SAR, China
+```
+
+```{r}
+#arranging the country's name in world bank equal to billionaire dataset
+wb_format<- wb$Country.Name %>%
+  str_replace_all("Hong Kong SAR, China","Hong Kong") %>%
+  str_replace_all("Russian Federation","Russia") %>%
+  str_replace_all("Czechia","Czech Republic") %>%
+  str_replace_all("Korea, Rep.","South Korea") %>%
+  str_replace_all("Taiwan, China","Taiwan") %>%
+  str_replace_all("Egypt, Arab Rep.","Egypt") %>%
+  str_replace_all("Eswatini","Eswatini (Swaziland)") %>%
+  str_replace_all("Turkiye","Turkey") %>%
+  str_replace_all("Venezuela, RB","Venezuela") %>%
+  str_replace_all("Slovak Republic","Slovakia") %>%
+  str_replace_all("Macao SAR, China","Macau")
+```
+
+```{r}
+#including the column of formatted country name in the world bank data
+wb$newname <- wb_format
+```
+
+```{r}
+list_country_wb2<- unique(wb$newname)
+for(i in 1:77){
+  if((list_country_bill[i] %in% list_country_wb2)==FALSE)
+    print(list_country_bill[i])
+}
+```
+
+```{r}
+#dropping the countries that does not have top 2639 billionaires 
+list_country_bill <- unique(bill$countryOfCitizenship)
+wb_count <- filter(wb, wb$newname%in% list_country_bill)
+
+#dropping columns that are not needed
+wb_drop <- wb_count %>%
+  select(-c(Country.Code,Series.Code, X2021..YR2021., Country.Name))
+```
+
+
+```{r}
+#pivoting the data so that each country takes one row
+wb_wide <- pivot_wider(wb_drop, 
+                       id_cols = newname,
+                       names_from =Series.Name, 
+                       values_from = X2022..YR2022.)
+```
+
+```{r}
+merge_data<- left_join(bill, wb_wide,by =c('countryOfCitizenship'='newname'))
+```
+
+```{r}
+#removing observations including &family in the name
+my_data<- merge_data%>%
+  filter(str_detect(personName, "& family", negate = TRUE))
+```
+
+```{r}
+#adding a age group variable
+
+age_group <- function(age) {
+  if (any(is.na(age))) {
+    return("unknown")
+  } else if(age < 21) {
+    return("1-20")
+  } else if (age <= 40) {
+    return("21-40")
+  } else if (age <= 60) {
+    return("41-60")
+  } else {
+    return("over 60")
+  }
+}
+
+my_data$ageGroup = sapply(my_data$age, age_group)
+```
+
+```{r}
+library(caret)
+```
+
+```{r}
+#creating a training and test set
+set.seed(1025)
+sample <- sample.int(n = nrow(my_data), size = floor(.7*nrow(my_data)), replace = F)
+train <- my_data[sample, ]
+test  <- my_data[-sample, ]
+```
+
+```{r}
+train = select(train, c("finalWorth", "industries", "age", "selfMade", "gender", "countryOfCitizenship", "ageGroup", "Political Stability and Absence of Violence/Terrorism: Estimate", "Control of Corruption: Estimate", "Rule of Law: Estimate"))
+```
+
+```{r}
+install.packages(leap)
+require(leaps)
+```
+
+
+```{r}
+full_train <-  train %>%
+  select(-c(finalWorth))
+best.lm <- leaps(full_train,train$finalWorth, method = "adjr2", nbest=2)
+data1 = cbind(best.lm$which,best.lm$adjr2) 
+```
+
+
+
+
+
+
+
+
+
