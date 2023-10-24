@@ -10,9 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 #loading the billionaire data
-bill<- read.csv("Bill.csv")
+bill<- read.csv("C:\Users\lequang\Desktop\final project\Bill.csv")
 #loading the world bank data
-wb<- read.csv("worldbank.csv")
+wb<- read.csv("C:\Users\lequang\Desktop\final project\worldbank.csv")
 ```
 
 ```{r}
